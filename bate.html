@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>App de Empréstimos</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background-color: #f3f4f6; }
+    .container { max-width: 600px; margin: auto; padding: 20px; background: white; margin-top: 50px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    h2 { text-align: center; }
+    input, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: 1px solid #ccc; }
+    button { background-color: #4f46e5; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #4338ca; }
+    .hidden { display: none; }
+    .card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 8px; background-color: #e5e7eb; }
+    .flex { display: flex; gap: 10px; }
+    .flex-between { display: flex; justify-content: space-between; }
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+    .day-box { padding: 10px; background: #d1d5db; text-align: center; border-radius: 5px; cursor: pointer; }
+    .paid { background: #10b981 !important; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container" id="login">
+    <h2>Login</h2>
+    <input type="text" placeholder="Usuário" id="usuario" />
+    <input type="password" placeholder="Senha" id="senha" />
+    <button onclick="login()">Entrar</button>
+  </div>
+
+  <div class="container hidden" id="cadastro">
+    <div class="flex-between">
+      <h2>Cadastrar Cliente</h2>
+      <button onclick="mostrarClientes()">Clientes</button>
+    </div>
+    <input type="text" placeholder="Nome" id="nome" />
+    <input type="text" placeholder="CPF" id="cpf" />
+    <input type="text" placeholder="Telefone" id="telefone" />
+    <input type="text" placeholder="Endereço" id="endereco" />
+    <button onclick="cadastrarCliente()">Cadastrar</button>
+    <p id="mensagem"></p>
+  </div>
+
+  <div class="container hidden" id="listaClientes">
+    <div class="flex-between">
+      <h2>Clientes</h2>
+      <div class="flex">
+        <button onclick="voltarParaCadastro()">Voltar</button>
+      </div>
+    </div>
+    <div id="clientes"></div>
+  </div>
+
+  <div class="container hidden" id="criarCredito">
+    <h2>Criar Crédito</h2>
+    <input type="number" placeholder="Valor do Crédito" id="valorCredito" />
+    <p>Taxa fixa de 20% será aplicada automaticamente.</p>
+    <p>Valor total com juros: R$ <span id="valorTotalTaxa">0.00</span></p>
+    <p>Valor da parcela diária (20 dias): R$ <span id="valorParcelaCalc">0.00</span></p>
+    <button onclick="confirmarCredito()">Confirmar</button>
+    <button onclick="voltarParaClientes()">Voltar</button>
+  </div>
+
+  <div class="container hidden" id="cartao">
+    <h2>Cartão de Pagamento</h2>
+    <div id="dadosCliente"></div>
+    <div class="grid" id="dias"></div>
+    <p>Total restante: R$ <span id="totalRestante"></span></p>
+    <input type="number" placeholder="Valor a remover" id="removerValor" />
+    <button onclick="removerPagamento()">Remover Pagamento</button>
+    <button onclick="pagarManual()">Pagar</button>
+    <button onclick="voltarParaClientes()">Voltar</button>
+  </div>
+
+  <script>
+    let clientes = JSON.parse(localStorage.getItem('clientes')) || [];
+    let clienteAtual = null;
+    let valorParcela = 0;
+
+    document.getElementById('valorCredito').addEventListener('input', () => {
+      const valorBase = Number(document.getElementById('valorCredito').value);
+      if (valorBase > 0) {
+        const valorTotal = valorBase * 1.2;
+        valorParcela = valorTotal / 20;
+        document.getElementById('valorTotalTaxa').innerText = valorTotal.toFixed(2);
+        document.getElementById('valorParcelaCalc').innerText = valorParcela.toFixed(2);
+      } else {
+        document.getElementById('valorTotalTaxa').innerText = '0.00';
+        document.getElementById('valorParcelaCalc').innerText = '0.00';
+        valorParcela = 0;
+      }
+    });
+
+    function login() {
+      const usuario = document.getElementById('usuario').value;
+      const senha = document.getElementById('senha').value;
+      if (usuario === 'thiago' && senha === '2025') {
+        document.getElementById('login').classList.add('hidden');
+        document.getElementById('cadastro').classList.remove('hidden');
+      } else {
+        alert('Usuário ou senha incorretos');
+      }
+    }
+
+    function cadastrarCliente() {
+      const nome = document.getElementById('nome').value.trim();
+      const cpf = document.getElementById('cpf').value.trim();
+      const telefone = document.getElementById('telefone').value.trim();
+      const endereco = document.getElementById('endereco').value.trim();
+
+      if (!nome || !cpf || !telefone || !endereco) {
+        alert('Por favor, preencha todos os campos.');
+        return;
+      }
+
+      clientes.push({ nome, cpf, telefone, endereco, pagamentos: [], total: 0 });
+      localStorage.setItem('clientes', JSON.stringify(clientes));
+      document.getElementById('mensagem').innerText = 'Cliente cadastrado com sucesso!';
+      document.getElementById('nome').value = '';
+      document.getElementById('cpf').value = '';
+      document.getElementById('telefone').value = '';
+      document.getElementById('endereco').value = '';
+    }
+
+    function mostrarClientes() {
+      document.getElementById('cadastro').classList.add('hidden');
+      document.getElementById('listaClientes').classList.remove('hidden');
+      const div = document.getElementById('clientes');
+      div.innerHTML = '';
+      clientes.forEach((c, i) => {
+        div.innerHTML += `
+          <div class="card">
+            <strong>${c.nome}</strong><br />
+            CPF: ${c.cpf}<br />
+            Tel: ${c.telefone}<br />
+            Endereço: ${c.endereco}<br />
+            <button onclick="editarCliente(${i})">Editar</button>
+            <button onclick="excluirCliente(${i})">Excluir</button>
+            <button onclick="abrirCredito(${i})">Criar Crédito</button>
+            <button onclick="verCartao(${i})">Ver Cartão</button>
+          </div>
+        `;
+      });
+    }
+
+    function voltarParaCadastro() {
+      document.getElementById('listaClientes').classList.add('hidden');
+      document.getElementById('cadastro').classList.remove('hidden');
+      document.getElementById('mensagem').innerText = '';
+    }
+
+    function editarCliente(index) {
+      const cliente = clientes[index];
+      const nome = prompt('Nome:', cliente.nome);
+      const cpf = prompt('CPF:', cliente.cpf);
+      const telefone = prompt('Telefone:', cliente.telefone);
+      const endereco = prompt('Endereço:', cliente.endereco);
+      if (nome && cpf && telefone && endereco) {
+        clientes[index] = { ...cliente, nome, cpf, telefone, endereco };
+        localStorage.setItem('clientes', JSON.stringify(clientes));
+        mostrarClientes();
+      }
+    }
+
+    function excluirCliente(index) {
+      if (confirm('Tem certeza que deseja excluir este cliente?')) {
+        clientes.splice(index, 1);
+        localStorage.setItem('clientes', JSON.stringify(clientes));
+        mostrarClientes();
+      }
+    }
+
+    function abrirCredito(index) {
+      clienteAtual = index;
+      document.getElementById('listaClientes').classList.add('hidden');
+      document.getElementById('criarCredito').classList.remove('hidden');
+      document.getElementById('valorCredito').value = '';
+      document.getElementById('valorTotalTaxa').innerText = '0.00';
+      document.getElementById('valorParcelaCalc').innerText = '0.00';
+    }
+
+    function confirmarCredito() {
+      const valorBase = Number(document.getElementById('valorCredito').value);
+      if (valorBase <= 0) {
+        alert('Informe um valor válido para o crédito.');
+        return;
+      }
+      const cliente = clientes[clienteAtual];
+      cliente.total = valorBase * 1.2;
+      cliente.valorParcela = cliente.total / 20;
+      cliente.pagamentos = new Array(20).fill(null);
+      localStorage.setItem('clientes', JSON.stringify(clientes));
+      alert('Crédito criado com sucesso!');
+      mostrarClientes();
+      document.getElementById('criarCredito').classList.add('hidden');
+      document.getElementById('listaClientes').classList.remove('hidden');
+    }
+
+    function verCartao(index) {
+      clienteAtual = index;
+      document.getElementById('listaClientes').classList.add('hidden');
+      document.getElementById('cartao').classList.remove('hidden');
+      mostrarCartao();
+    }
+
+    function mostrarCartao() {
+      const cliente = clientes[clienteAtual];
+      document.getElementById('dadosCliente').innerHTML = `
+        <strong>${cliente.nome}</strong><br />
+        Crédito total: R$ ${cliente.total.toFixed(2)}<br />
+        Parcela diária: R$ ${cliente.valorParcela.toFixed(2)}<br />
+      `;
+
+      const dias = document.getElementById('dias');
+      dias.innerHTML = '';
+      for (let i = 0; i < 20; i++) {
+        const dia = document.createElement('div');
+        dia.className = 'day-box';
+        dia.innerText = i + 1;
+        if (cliente.pagamentos[i]) {
+          dia.classList.add('paid');
+          dia.title = `Pago: R$ ${cliente.pagamentos[i].toFixed(2)}`;
+        }
+        dia.onclick = () => marcarPagamento(i);
+        dias.appendChild(dia);
+      }
+
+      atualizarTotalRestante();
+    }
+
+    function marcarPagamento(diaIndex) {
+      const cliente = clientes[clienteAtual];
+      if (cliente.pagamentos[diaIndex]) {
+        alert('Este dia já está marcado como pago.');
+        return;
+      }
+      if (confirm(`Marcar o dia ${diaIndex + 1} como pago no valor de R$ ${cliente.valorParcela.toFixed(2)}?`)) {
+        cliente.pagamentos[diaIndex] = cliente.valorParcela;
+        atualizarTotalRestante();
+        localStorage.setItem('clientes', JSON.stringify(clientes));
+        mostrarCartao();
+      }
+    }
+
+    // Botão pagar manual - editar valor
+    function pagarManual() {
+      const valor = parseFloat(prompt('Digite o valor a pagar:'));
+      if (isNaN(valor) || valor <= 0) {
+        alert('Valor inválido.');
+        return;
+      }
+
+      const cliente = clientes[clienteAtual];
+      let valorRestante = valor;
+
+      // Distribui o valor pago nos dias não pagos ou parcialmente pagos
+      for (let i = 0; i < cliente.pagamentos.length; i++) {
+        if (valorRestante <= 0) break;
+
+        if (!cliente.pagamentos[i]) {
+          if (valorRestante >= cliente.valorParcela) {
+            cliente.pagamentos[i] = cliente.valorParcela;
+            valorRestante -= cliente.valorParcela;
+          } else {
+            cliente.pagamentos[i] = valorRestante;
+            valorRestante = 0;
+          }
+        } else if (cliente.pagamentos[i] < cliente.valorParcela) {
+          const faltante = cliente.valorParcela - cliente.pagamentos[i];
+          if (valorRestante >= faltante) {
+            cliente.pagamentos[i] += faltante;
+            valorRestante -= faltante;
+          } else {
+            cliente.pagamentos[i] += valorRestante;
+            valorRestante = 0;
+          }
+        }
+      }
+
+      if (valorRestante > 0) {
+        alert(`Pagamento excedeu o valor total do crédito. Sobrou R$ ${valorRestante.toFixed(2)}`);
+      }
+
+      localStorage.setItem('clientes', JSON.stringify(clientes));
+      atualizarTotalRestante();
+      mostrarCartao();
+    }
+
+    function atualizarTotalRestante() {
+      const cliente = clientes[clienteAtual];
+      const pago = cliente.pagamentos.reduce((acc, val) => acc + (val || 0), 0);
+      const restante = cliente.total - pago;
+      document.getElementById('totalRestante').innerText = restante.toFixed(2);
+    }
+
+    function removerPagamento() {
+      const valorRemover = Number(document.getElementById('removerValor').value);
+      if (valorRemover <= 0) {
+        alert('Informe um valor válido para remover.');
+        return;
+      }
+      const cliente = clientes[clienteAtual];
+      const pago = cliente.pagamentos.reduce((acc, val) => acc + (val || 0), 0);
+      if (valorRemover > pago) {
+        alert('Valor a remover maior que o total pago.');
+        return;
+      }
+      let restanteARemover = valorRemover;
+      for (let i = cliente.pagamentos.length - 1; i >= 0; i--) {
+        if (cliente.pagamentos[i] && restanteARemover > 0) {
+          if (cliente.pagamentos[i] <= restanteARemover) {
+            restanteARemover -= cliente.pagamentos[i];
+            cliente.pagamentos[i] = null;
+          } else {
+            cliente.pagamentos[i] -= restanteARemover;
+            restanteARemover = 0;
+          }
+        }
+      }
+      localStorage.setItem('clientes', JSON.stringify(clientes));
+      document.getElementById('removerValor').value = '';
+      atualizarTotalRestante();
+      mostrarCartao();
+    }
+
+    function voltarParaClientes() {
+      document.getElementById('cartao').classList.add('hidden');
+      document.getElementById('criarCredito').classList.add('hidden');
+      document.getElementById('listaClientes').classList.remove('hidden');
+      mostrarClientes();
+    }
+  </script>
+</body>
+</html>
